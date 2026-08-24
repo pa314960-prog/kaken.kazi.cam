@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カメラ手ジェスチャー舵コントロール</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>手のジェスチャーで舵を動かす</h1>
+    <p class="sub">カメラに手をかざして、手を左右に傾けると舵が動きます。</p>
+  </header>
+
+  <main>
+    <section class="camera-area">
+      <div class="video-wrap">
+        <video id="input-video" autoplay playsinline></video>
+        <canvas id="overlay-canvas"></canvas>
+      </div>
+      <p id="status" class="status">「カメラ開始」を押してください</p>
+      <div class="controls">
+        <button id="btn-start">カメラ開始</button>
+        <button id="btn-stop" disabled>カメラ停止</button>
+        <button id="btn-calibrate" disabled>今の手の向きを基準(0°)にする</button>
+      </div>
+    </section>
+
+    <section class="rudder-area">
+      <h2>舵の状態</h2>
+      <svg id="rudder-svg" viewBox="-100 -140 200 260" width="260" height="340">
+        <!-- 船体(上から見た形) -->
+        <ellipse cx="0" cy="-10" rx="55" ry="110" fill="#2b3a55" stroke="#0d1626" stroke-width="3"/>
+        <!-- 舵(rudder blade)。stern(船尾)を回転の支点にする -->
+        <g id="rudder-pivot" transform="translate(0,100)">
+          <rect x="-8" y="0" width="16" height="70" fill="#d94f4f" stroke="#5a1414" stroke-width="2" rx="3"/>
+        </g>
+      </svg>
+      <p class="angle-readout">舵角: <span id="angle-value">0.0</span>°</p>
+
+      <div class="settings">
+        <label>
+          感度(手の傾きへの反応の強さ)
+          <input type="range" id="sensitivity" min="0.5" max="3" step="0.1" value="1.5">
+          <span id="sensitivity-value">1.5</span>
+        </label>
+        <label>
+          最大舵角
+          <input type="range" id="max-angle" min="10" max="60" step="5" value="40">
+          <span id="max-angle-value">40</span>°
+        </label>
+        <label>
+          <input type="checkbox" id="mirror-toggle" checked>
+          左右反転(動きが逆に感じる場合はチェックを外す)
+        </label>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>使い方や設定変更のしかたは <a href="README.md">README.md</a> を参照してください。</p>
+  </footer>
+
+  <!-- MediaPipe Hands (CDN読み込み。インストール不要でどのPCでも同じものが読み込まれます) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="main.js"></script>
+</body>
+</html>
