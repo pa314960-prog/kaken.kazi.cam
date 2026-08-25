@@ -3,68 +3,275 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>カメラ手ジェスチャー舵コントロール</title>
+<title>大海原を操れ！魔法の操舵輪</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Shippori+Mincho:wght@700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>手のジェスチャーで舵を動かす</h1>
-    <p class="sub">カメラに手をかざして、手を左右に傾けると舵が動きます。</p>
-  </header>
 
-  <main>
-    <section class="camera-area">
-      <div class="video-wrap">
-        <video id="input-video" autoplay playsinline></video>
-        <canvas id="overlay-canvas"></canvas>
-      </div>
-      <p id="status" class="status">「カメラ開始」を押してください</p>
-      <div class="controls">
-        <button id="btn-start">カメラ開始</button>
-        <button id="btn-stop" disabled>カメラ停止</button>
-        <button id="btn-calibrate" disabled>今の手の向きを基準(0°)にする</button>
-      </div>
-    </section>
+  <!-- 海・岩・船首はすべてこのキャンバスに描いている(game.js) -->
+  <canvas id="game-canvas"></canvas>
 
-    <section class="rudder-area">
-      <h2>舵の状態</h2>
-      <svg id="rudder-svg" viewBox="-100 -140 200 260" width="260" height="340">
-        <!-- 船体(上から見た形) -->
-        <ellipse cx="0" cy="-10" rx="55" ry="110" fill="#2b3a55" stroke="#0d1626" stroke-width="3"/>
-        <!-- 舵(rudder blade)。stern(船尾)を回転の支点にする -->
-        <g id="rudder-pivot" transform="translate(0,100)">
-          <rect x="-8" y="0" width="16" height="70" fill="#d94f4f" stroke="#5a1414" stroke-width="2" rx="3"/>
+  <!-- 火の粉の演出 -->
+  <div class="embers" aria-hidden="true">
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
+
+  <div class="vignette" aria-hidden="true"></div>
+
+  <!-- ============================================================
+       プレイ中の表示(スコアなど)
+       ============================================================ -->
+  <div class="hud" id="hud" hidden>
+    <div class="hud-item">
+      <span class="hud-label">航行距離</span>
+      <span class="hud-value"><span id="hud-distance">0</span><span class="hud-unit">m</span></span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">避けた岩</span>
+      <span class="hud-value"><span id="hud-dodged">0</span></span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">船体</span>
+      <!-- 印の数は難易度によって変わるので main.js が作ります -->
+      <span class="hud-pips" id="hud-hp"></span>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       操舵輪(画面下の操作盤)。舵角に合わせて回転する
+       ============================================================ -->
+  <div class="helm-hud">
+    <svg id="wheel-svg" viewBox="-200 -200 400 400" role="img"
+         aria-label="魔法の操舵輪。手の傾きに合わせて回転します。">
+      <defs>
+        <linearGradient id="gold" x1="0" y1="-1" x2="0" y2="1">
+          <stop offset="0%"   stop-color="#fff2c4"/>
+          <stop offset="35%"  stop-color="#f0c66a"/>
+          <stop offset="70%"  stop-color="#c8912f"/>
+          <stop offset="100%" stop-color="#7d5415"/>
+        </linearGradient>
+        <radialGradient id="hub-gem" cx="35%" cy="30%">
+          <stop offset="0%"   stop-color="#fffbe8"/>
+          <stop offset="45%"  stop-color="#ffd97a"/>
+          <stop offset="100%" stop-color="#a86f1c"/>
+        </radialGradient>
+        <!-- 輪を握る手(黒い手袋)の色 -->
+        <linearGradient id="glove" x1="0" y1="-1" x2="0" y2="1">
+          <stop offset="0%"   stop-color="#31506f"/>
+          <stop offset="55%"  stop-color="#16283c"/>
+          <stop offset="100%" stop-color="#080f1a"/>
+        </linearGradient>
+        <!-- 輪を握る手の形(左右で使い回す) -->
+        <g id="grip-hand" fill="url(#glove)">
+          <!-- 手首 -->
+          <rect x="-15" y="-35" width="30" height="20" rx="8" opacity=".92"/>
+          <!-- 手のひらが輪を包む -->
+          <rect x="-21" y="-19" width="42" height="36" rx="14"
+                stroke="#fff2c4" stroke-opacity=".45" stroke-width="1.5"/>
+          <!-- 親指 -->
+          <ellipse cx="-23" cy="-2" rx="8" ry="12"/>
+          <!-- 指が輪の内側へ回り込む -->
+          <rect x="-16" y="10" width="10" height="21" rx="5"/>
+          <rect x="-4"  y="11" width="10" height="23" rx="5"/>
+          <rect x="8"   y="10" width="10" height="20" rx="5"/>
         </g>
-      </svg>
-      <p class="angle-readout">舵角: <span id="angle-value">0.0</span>°</p>
 
-      <div class="settings">
-        <label>
-          感度(手の傾きへの反応の強さ)
-          <input type="range" id="sensitivity" min="0.5" max="3" step="0.1" value="1.5">
-          <span id="sensitivity-value">1.5</span>
-        </label>
-        <label>
-          最大舵角
-          <input type="range" id="max-angle" min="10" max="60" step="5" value="40">
-          <span id="max-angle-value">40</span>°
-        </label>
-        <label>
-          <input type="checkbox" id="mirror-toggle" checked>
-          左右反転(動きが逆に感じる場合はチェックを外す)
-        </label>
+        <filter id="bloom" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="7" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+      </defs>
+
+      <!-- 背後の魔法陣(ゆっくり逆回転) -->
+      <g class="rune-ring" fill="none" stroke="#ffd97a">
+        <circle r="185" stroke-width="1.5" opacity=".22" stroke-dasharray="3 14"/>
+        <circle r="168" stroke-width="1"   opacity=".16" stroke-dasharray="26 10"/>
+      </g>
+
+      <!-- ここが舵角に合わせて回転する部分 -->
+      <g id="wheel-rotor">
+      <g filter="url(#bloom)">
+        <!-- 握り手(8本) -->
+        <g class="handles" fill="url(#gold)">
+          <g><rect x="-7" y="-186" width="14" height="60" rx="6"/><circle cx="0" cy="-188" r="9"/></g>
+          <g transform="rotate(45)"><rect x="-7" y="-186" width="14" height="60" rx="6"/><circle cx="0" cy="-188" r="9"/></g>
+          <g transform="rotate(90)"><rect x="-7" y="-186" width="14" height="60" rx="6"/><circle cx="0" cy="-188" r="9"/></g>
+          <g transform="rotate(135)"><rect x="-7" y="-186" width="14" height="60" rx="6"/><circle cx="0" cy="-188" r="9"/></g>
+          <g transform="rotate(180)"><rect x="-7" y="-186" width="14" height="60" rx="6"/><circle cx="0" cy="-188" r="9"/></g>
+          <g transform="rotate(225)"><rect x="-7" y="-186" width="14" height="60" rx="6"/><circle cx="0" cy="-188" r="9"/></g>
+          <g transform="rotate(270)"><rect x="-7" y="-186" width="14" height="60" rx="6"/><circle cx="0" cy="-188" r="9"/></g>
+          <g transform="rotate(315)"><rect x="-7" y="-186" width="14" height="60" rx="6"/><circle cx="0" cy="-188" r="9"/></g>
+        </g>
+
+        <!-- 外輪 -->
+        <circle r="130" fill="none" stroke="url(#gold)" stroke-width="20"/>
+        <circle r="130" fill="none" stroke="#fff6d5" stroke-width="2" opacity=".55"/>
+        <circle r="118" fill="none" stroke="#8a5c18" stroke-width="2" opacity=".7"/>
+        <circle r="130" fill="none" stroke="#5c3a0c" stroke-width="10"
+                stroke-dasharray="2 22" opacity=".55"/>
+
+        <!-- スポーク(8本) -->
+        <g class="spokes" fill="url(#gold)">
+          <rect x="-6" y="-128" width="12" height="102" rx="4"/>
+          <rect x="-6" y="-128" width="12" height="102" rx="4" transform="rotate(45)"/>
+          <rect x="-6" y="-128" width="12" height="102" rx="4" transform="rotate(90)"/>
+          <rect x="-6" y="-128" width="12" height="102" rx="4" transform="rotate(135)"/>
+          <rect x="-6" y="-128" width="12" height="102" rx="4" transform="rotate(180)"/>
+          <rect x="-6" y="-128" width="12" height="102" rx="4" transform="rotate(225)"/>
+          <rect x="-6" y="-128" width="12" height="102" rx="4" transform="rotate(270)"/>
+          <rect x="-6" y="-128" width="12" height="102" rx="4" transform="rotate(315)"/>
+        </g>
+
+        <!-- 中央のハブと魔法石 -->
+        <circle r="34" fill="url(#gold)"/>
+        <circle r="34" fill="none" stroke="#fff6d5" stroke-width="1.5" opacity=".6"/>
+        <circle r="19" fill="url(#hub-gem)"/>
+        <circle r="19" fill="none" stroke="#7d5415" stroke-width="1.5" opacity=".6"/>
+      </g>
+
+        <!-- 輪を握る手。検出した手の数に合わせて main.js が出し分けます。
+             輪と一緒に回るので、両手の傾き = 舵の傾き がそのまま見た目になります。 -->
+        <!-- 握る位置は10時・2時。ここなら舵をいっぱいに切っても
+             手が画面の下端(輪の切れ目)に隠れない。 -->
+        <g class="grip" id="grip-right" transform="rotate(65) translate(0,-130)">
+          <use href="#grip-hand"/>
+        </g>
+        <g class="grip" id="grip-left" transform="rotate(-65) translate(0,-130) scale(-1,1)">
+          <use href="#grip-hand"/>
+        </g>
+      </g>
+    </svg>
+
+    <p class="angle-readout">
+      <span class="label">舵角</span>
+      <span id="angle-value">0.0</span><span class="unit">°</span>
+    </p>
+  </div>
+
+  <!-- カメラ映像(隅の小窓) -->
+  <aside class="camera-dock">
+    <div class="dock-label">HAND TRACKING</div>
+    <div class="video-wrap">
+      <video id="input-video" autoplay playsinline muted></video>
+      <canvas id="overlay-canvas"></canvas>
+    </div>
+    <p id="status" class="status">カメラは停止中です</p>
+  </aside>
+
+  <!-- 操作ボタン -->
+  <nav class="controls">
+    <button id="btn-start" class="btn">カメラ開始</button>
+    <button id="btn-stop" class="btn" disabled>カメラ停止</button>
+    <button id="btn-calibrate" class="btn" disabled>今の手の向きを基準(0°)にする</button>
+    <button id="btn-sound" class="btn" aria-pressed="true">♪ 音 ON</button>
+  </nav>
+
+  <!-- 設定(普段は畳んでおく) -->
+  <details class="settings-dock">
+    <summary>設定</summary>
+    <div class="settings">
+      <label>
+        <span>感度(手の傾きへの反応の強さ)</span>
+        <input type="range" id="sensitivity" min="0.5" max="3" step="0.1" value="1.5">
+        <output id="sensitivity-value">1.5</output>
+      </label>
+      <label>
+        <span>最大舵角</span>
+        <input type="range" id="max-angle" min="10" max="60" step="5" value="40">
+        <output id="max-angle-value">40</output>
+      </label>
+      <label class="check">
+        <input type="checkbox" id="mirror-toggle" checked>
+        <span>左右反転(動きが逆に感じる場合はチェックを外す)</span>
+      </label>
+      <p class="hint">使い方は <a href="README.md">README.md</a> を参照してください。</p>
+    </div>
+  </details>
+
+  <!-- ============================================================
+       スタート画面
+       ============================================================ -->
+  <div class="overlay" id="overlay-title">
+    <div class="overlay-inner">
+      <h1 class="title">
+        <span class="jp">大海原を操れ！魔法の操舵輪</span>
+        <span class="en">Piloting the Deep : Magic Steering Wheel</span>
+      </h1>
+
+      <ol class="howto">
+        <li><b>カメラ開始</b>を押して、ブラウザの「カメラを許可しますか？」に<b>許可</b>を押す</li>
+        <li>カメラに手をかざす。<b>両手でも片手でもOK</b>(自動で切り替わります)
+          <ul>
+            <li><b>両手</b>… 舵輪を握るように両手を出し、傾けて回す</li>
+            <li><b>片手</b>… 手をまっすぐ立て、左右に傾ける</li>
+          </ul>
+        </li>
+        <li>その姿勢のまま<b>「今の手の向きを基準にする」</b>を押す(基準合わせ)</li>
+        <li>舵を切って、<b>正面から迫る岩をよける</b></li>
+      </ol>
+
+      <p class="warn">船はすぐには曲がりません。岩が来る前に早めに舵を切ってください。</p>
+
+      <div class="difficulty">
+        <span class="difficulty-label">難易度</span>
+        <div class="difficulty-buttons" id="difficulty-buttons" role="group" aria-label="難易度">
+          <button class="btn btn-diff" data-difficulty="easy">
+            やさしい<small>船体5 / ゆっくり</small>
+          </button>
+          <button class="btn btn-diff is-selected" data-difficulty="normal">
+            ふつう<small>船体3 / 標準</small>
+          </button>
+          <button class="btn btn-diff" data-difficulty="hard">
+            むずかしい<small>船体2 / 高速・狭い</small>
+          </button>
+        </div>
       </div>
-    </section>
-  </main>
 
-  <footer>
-    <p>使い方や設定変更のしかたは <a href="README.md">README.md</a> を参照してください。</p>
-  </footer>
+      <button id="btn-play" class="btn btn-primary btn-large">ゲーム開始</button>
+      <p class="hint">カメラが使えないときは、キーボードの ← → キーでも操作できます。</p>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       ゲームオーバー画面
+       ============================================================ -->
+  <div class="overlay" id="overlay-gameover" hidden>
+    <div class="overlay-inner">
+      <h2 class="result-title">座礁！</h2>
+      <div class="result-grid">
+        <div>
+          <span class="result-label">航行距離</span>
+          <span class="result-value"><span id="result-distance">0</span><span class="result-unit">m</span></span>
+        </div>
+        <div>
+          <span class="result-label">避けた岩</span>
+          <span class="result-value"><span id="result-dodged">0</span></span>
+        </div>
+      </div>
+      <p class="result-best">
+        <span id="result-difficulty">ふつう</span> の自己最高記録: <span id="result-best">0</span>m
+      </p>
+      <div class="result-actions">
+        <button id="btn-retry" class="btn btn-primary btn-large">もう一度</button>
+        <button id="btn-back-title" class="btn">難易度を変える</button>
+      </div>
+    </div>
+  </div>
 
   <!-- MediaPipe Hands (CDN読み込み。インストール不要でどのPCでも同じものが読み込まれます) -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="sound.js"></script>
+  <script src="game.js"></script>
   <script src="main.js"></script>
 </body>
 </html>
